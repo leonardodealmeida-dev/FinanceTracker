@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QDialog, QFormLayout,
     QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit,
-    QTextEdit, QMessageBox, QHeaderView, QFrame, QCheckBox, QTabWidget
+    QTextEdit, QMessageBox, QHeaderView, QFrame, QCheckBox, QTabWidget,
+    QInputDialog
 )
 
 from app.analytics import (
@@ -71,6 +72,18 @@ TEXT = {
             "O banco de dados precisa da atualização de recorrência. "
             "Execute migrations/001_add_recurrence.sql no Supabase."
         ),
+        "delete_account": "Excluir conta",
+        "delete_account_warning": (
+            "Isso exclui sua conta e TODAS as suas transações "
+            "permanentemente. Essa ação não pode ser desfeita."
+        ),
+        "delete_account_type_email": "Digite seu e-mail para confirmar:",
+        "delete_account_mismatch": "O e-mail não confere. Nada foi excluído.",
+        "delete_account_failed": (
+            "Não foi possível excluir a conta. Tente novamente mais "
+            "tarde ou entre em contato com o suporte."
+        ),
+        "account_deleted": "Sua conta e seus dados foram excluídos.",
     },
     "en_US": {
         "title": "Overview", "balance": "Net balance",
@@ -123,6 +136,18 @@ TEXT = {
             "The database needs the recurrence update. "
             "Run migrations/001_add_recurrence.sql in Supabase."
         ),
+        "delete_account": "Delete account",
+        "delete_account_warning": (
+            "This permanently deletes your account and ALL of your "
+            "transactions. This cannot be undone."
+        ),
+        "delete_account_type_email": "Type your email to confirm:",
+        "delete_account_mismatch": "Email doesn't match. Nothing was deleted.",
+        "delete_account_failed": (
+            "Couldn't delete the account. Please try again later or "
+            "contact support."
+        ),
+        "account_deleted": "Your account and data have been deleted.",
     },
 }
 
@@ -411,9 +436,16 @@ class Dashboard(QWidget):
         logout = QPushButton(T["logout"])
         logout.clicked.connect(self.logout)
 
+        delete_account = QPushButton(T["delete_account"])
+        delete_account.setStyleSheet(
+            "color: #f2b8a8; border: 1px solid #5a3a33;"
+        )
+        delete_account.clicked.connect(self.delete_account)
+
         header.addWidget(brand)
         header.addStretch()
         header.addWidget(self.user_label)
+        header.addWidget(delete_account)
         header.addWidget(logout)
         root.addLayout(header)
 
@@ -758,6 +790,52 @@ class Dashboard(QWidget):
         except Exception as error:
             print("Transaction delete error:", str(error))
             QMessageBox.warning(self, T["error"], T["delete_error"])
+
+    def delete_account(self):
+        """Permanently delete the user's account and every transaction.
+
+        Needs migrations/002_account_deletion.sql (a database function
+        that removes the signed-in user; the client can't do it alone).
+        """
+        answer = QMessageBox.warning(
+            self, T["delete_account"], T["delete_account_warning"],
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        email = (self.user.email or "").strip().lower()
+        typed, ok = QInputDialog.getText(
+            self, T["delete_account"], T["delete_account_type_email"]
+        )
+        if not ok:
+            return
+        if typed.strip().lower() != email:
+            QMessageBox.information(
+                self, T["delete_account"], T["delete_account_mismatch"]
+            )
+            return
+
+        try:
+            supabase.rpc("delete_my_account").execute()
+        except Exception as error:
+            print("Account deletion error:", str(error))
+            QMessageBox.warning(
+                self, T["error"], T["delete_account_failed"]
+            )
+            return
+
+        try:
+            supabase.auth.sign_out()
+        except Exception as error:
+            print("Sign-out after deletion:", str(error))
+
+        QMessageBox.information(
+            self, T["delete_account"], T["account_deleted"]
+        )
+        self.logged_out.emit()
+        self.close()
 
     def logout(self):
         try:

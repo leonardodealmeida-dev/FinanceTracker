@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.i18n import tr
+from app.ui.reset_password import ResetPasswordDialog
+from app.version import __version__
 from app.services.supabase_service import supabase
 
 
@@ -63,6 +65,13 @@ class LoginWindow(QWidget):
                 padding: 8px;
             }
             QLabel#status { color: #f2b8a8; font-size: 12px; }
+            QLabel#version { color: #6f8174; font-size: 11px; }
+            QDialog QPushButton {
+                background: #26332a;
+                border: 1px solid #35463a;
+                border-radius: 8px;
+                padding: 9px 12px;
+            }
         """)
 
         root = QVBoxLayout(self)
@@ -113,6 +122,15 @@ class LoginWindow(QWidget):
         self.toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.toggle_button.clicked.connect(self.toggle_mode)
 
+        self.forgot_button = QPushButton(tr("forgot_password"))
+        self.forgot_button.setObjectName("secondary")
+        self.forgot_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.forgot_button.clicked.connect(self.forgot_password)
+
+        version = QLabel(f"v{__version__}")
+        version.setObjectName("version")
+        version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         layout.addWidget(brand)
         layout.addWidget(subtitle)
         layout.addSpacing(12)
@@ -121,13 +139,21 @@ class LoginWindow(QWidget):
         layout.addWidget(self.password)
         layout.addWidget(self.status)
         layout.addWidget(self.submit_button)
+        layout.addWidget(self.forgot_button)
         layout.addWidget(self.toggle_button)
+        layout.addWidget(version)
 
         root.addWidget(card)
+
+    def forgot_password(self):
+        dialog = ResetPasswordDialog(self, self.email.text().strip())
+        dialog.setStyleSheet(self.styleSheet())
+        dialog.exec()
 
     def toggle_mode(self):
         self.signup_mode = not self.signup_mode
         self.status.clear()
+        self.forgot_button.setVisible(not self.signup_mode)
 
         if self.signup_mode:
             self.heading.setText(tr("signup_heading"))

@@ -37,6 +37,28 @@ TRANSLATIONS = {
             "Login concluído! O painel financeiro será implementado "
             "na próxima etapa."
         ),
+        "config_error": (
+            "O aplicativo não está configurado para se conectar ao "
+            "servidor."
+        ),
+        "forgot_password": "Esqueceu a senha?",
+        "reset_title": "Redefinir senha",
+        "reset_intro": "Digite seu e-mail para receber um código.",
+        "reset_send_code": "Enviar código",
+        "reset_code_sent": (
+            "Se existir uma conta com esse e-mail, enviamos um código. "
+            "Digite-o abaixo com sua nova senha."
+        ),
+        "reset_code_placeholder": "Código recebido por e-mail",
+        "reset_new_password": "Nova senha (mín. 8 caracteres)",
+        "reset_confirm": "Redefinir senha",
+        "reset_failed": "Código inválido ou expirado.",
+        "reset_send_failed": (
+            "Não foi possível enviar o código. Tente novamente em "
+            "alguns minutos."
+        ),
+        "reset_done": "Senha atualizada! Agora você pode entrar.",
+        "cancel": "Cancelar",
     },
     "en_US": {
         "brand": "FinanceTracker",
@@ -71,6 +93,26 @@ TRANSLATIONS = {
             "Login successful! The financial dashboard will be "
             "implemented in the next step."
         ),
+        "config_error": (
+            "The app isn't configured to connect to the server."
+        ),
+        "forgot_password": "Forgot password?",
+        "reset_title": "Reset password",
+        "reset_intro": "Enter your email to receive a code.",
+        "reset_send_code": "Send code",
+        "reset_code_sent": (
+            "If an account exists for that email, we sent a code. "
+            "Enter it below with your new password."
+        ),
+        "reset_code_placeholder": "Code from the email",
+        "reset_new_password": "New password (min. 8 characters)",
+        "reset_confirm": "Reset password",
+        "reset_failed": "Invalid or expired code.",
+        "reset_send_failed": (
+            "Couldn't send the code. Please try again in a few minutes."
+        ),
+        "reset_done": "Password updated! You can now sign in.",
+        "cancel": "Cancel",
     },
 }
 
