@@ -9,6 +9,8 @@ FinanceTracker helps users organize their personal finances by managing transact
 - **User Authentication** — Create an account and sign in securely.
 - **Transaction Management** — Add, edit, and delete financial transactions.
 - **Automatic Calculations** — Track income, expenses, and your overall balance.
+- **Recurring Transactions** — Enter a salary, rent, gas or groceries once and mark it as daily, weekly, monthly or yearly (with an optional end date). The app counts every occurrence automatically.
+- **Charts** — Income vs. expenses by month, spending by category, and your balance over time, filterable by period (this month, last 3/6 months, this year, all time).
 - **Cloud Database** — Store transaction data using Supabase.
 - **User Data Isolation** — Use Supabase Authentication and Row Level Security (RLS) to help protect users' financial records.
 - **Desktop Interface** — A graphical interface built with PySide6.
@@ -58,7 +60,7 @@ py -m venv .venv
 ### 3. Install dependencies
 
 ```bash
-python -m pip install PySide6 supabase python-dotenv
+python -m pip install -r requirements.txt
 ```
 
 ### 4. Configure Supabase
@@ -88,6 +90,15 @@ The `transactions` table must contain the fields expected by the application, in
 - `notes`
 - `created_at`
 
+Recurring transactions also need two more columns. Run
+[`migrations/001_add_recurrence.sql`](migrations/001_add_recurrence.sql) once in the
+Supabase SQL Editor:
+
+- `frequency` — `once`, `daily`, `weekly`, `monthly` or `yearly` (default `once`)
+- `end_date` — optional date after which the transaction stops repeating
+
+Existing transactions are kept and become one-time transactions.
+
 Enable Row Level Security and configure policies so authenticated users can access only their own records.
 
 ### 5. Run the application
@@ -103,6 +114,14 @@ source .venv/bin/activate
 python main.py
 ```
 
+## Running the tests
+
+The recurrence and chart-aggregation logic has no GUI or database dependency:
+
+```bash
+python -m pytest tests
+```
+
 ## Project Structure
 
 ```text
@@ -112,8 +131,14 @@ FinanceTracker/
 │   │   └── supabase_service.py
 │   ├── ui/
 │   │   ├── login_window.py
-│   │   └── dashboard.py
+│   │   ├── dashboard.py
+│   │   └── charts.py
+│   ├── analytics.py      # chart/total aggregation (no Qt)
+│   ├── recurrence.py     # expands recurring transactions (no Qt)
 │   └── i18n.py
+├── migrations/
+│   └── 001_add_recurrence.sql
+├── tests/
 ├── .env                  # Local configuration; do not commit
 ├── .gitignore
 ├── main.py
@@ -135,7 +160,6 @@ For a secure deployment:
 
 Potential future improvements include:
 
-- Financial charts and spending insights
 - Monthly budgets and spending limits
 - Custom transaction categories
 - CSV export and reporting
