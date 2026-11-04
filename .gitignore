@@ -6,3 +6,19 @@ __pycache__/
 *.db
 build/
 dist/
+
+# Local Python environments
+.venv/
+.venv-*/
+venv/
+
+# Private configuration
+.env
+.env.*
+
+# Compiled application
+/FinanceTracker
+/_internal/
+/icon.png
+dist/
+build/
