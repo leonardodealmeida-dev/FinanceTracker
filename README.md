@@ -38,6 +38,7 @@ Intel Macs are not supported yet.
 
 ## Features
 
+- **Guided start**: a short tutorial appears the first time you sign in, and you can reopen it any time with the **Help** button.
 - **Accounts**: sign up and sign in with email and password. Forgot your password? Reset it in the app with a code sent to your email.
 - **Transactions**: add, edit, delete and search income and expenses, with categories and notes.
 - **Recurring transactions**: enter a salary, rent, gas or groceries once and mark it as daily, weekly, monthly or yearly, with an optional end date. Every occurrence is counted automatically.
@@ -110,6 +111,16 @@ python main.py
 ```
 
 See [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) for the full maintainer guide (Row Level Security, password-reset email template, SMTP, release secrets).
+
+### Build the Linux app locally
+
+With a `.env` in place, one command builds the standalone app (needs internet):
+
+```bash
+./build_linux.sh
+```
+
+The result is in `dist/FinanceTracker/` (run the `FinanceTracker` file) and as a `.tar.gz` ready to share. Windows and macOS builds come from the GitHub release workflow.
 
 ### Tests
 

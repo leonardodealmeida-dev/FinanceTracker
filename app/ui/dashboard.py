@@ -2,7 +2,7 @@
 from datetime import date
 from decimal import Decimal
 
-from PySide6.QtCore import Qt, QDate, Signal
+from PySide6.QtCore import Qt, QDate, QTimer, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QDialog, QFormLayout,
@@ -17,7 +17,9 @@ from app.analytics import (
 from app.i18n import LANGUAGE, tr
 from app.recurrence import FREQUENCIES, add_months_to_first, expand, parse_date
 from app.services.supabase_service import supabase
+from app.tutorial_state import mark_seen, should_show
 from app.ui.charts import BalanceLineChart, CategoryDonutChart, MonthlyBarChart
+from app.ui.tutorial import TutorialDialog
 
 
 TEXT = {
@@ -72,6 +74,7 @@ TEXT = {
             "O banco de dados precisa da atualização de recorrência. "
             "Execute migrations/001_add_recurrence.sql no Supabase."
         ),
+        "help": "Ajuda",
         "delete_account": "Excluir conta",
         "delete_account_warning": (
             "Isso exclui sua conta e TODAS as suas transações "
@@ -136,6 +139,7 @@ TEXT = {
             "The database needs the recurrence update. "
             "Run migrations/001_add_recurrence.sql in Supabase."
         ),
+        "help": "Help",
         "delete_account": "Delete account",
         "delete_account_warning": (
             "This permanently deletes your account and ALL of your "
@@ -444,7 +448,11 @@ class Dashboard(QWidget):
 
         header.addWidget(brand)
         header.addStretch()
+        help_button = QPushButton(T["help"])
+        help_button.clicked.connect(self.show_tutorial)
+
         header.addWidget(self.user_label)
+        header.addWidget(help_button)
         header.addWidget(delete_account)
         header.addWidget(logout)
         root.addLayout(header)
@@ -484,6 +492,19 @@ class Dashboard(QWidget):
         root.addWidget(self.status)
 
         self.load_transactions()
+
+        # First login on this account: show the tutorial once the window
+        # is up (slight delay so it appears on top of the dashboard).
+        if should_show(self.user):
+            QTimer.singleShot(400, self.show_first_login_tutorial)
+
+    def show_tutorial(self):
+        TutorialDialog(self).exec()
+
+    def show_first_login_tutorial(self):
+        self.show_tutorial()
+        # Skipped or finished: either way, don't show it again.
+        mark_seen(self.user, supabase)
 
     # ------------------------------------------------------------ layout
     def build_charts_tab(self):

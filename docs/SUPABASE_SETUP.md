@@ -47,6 +47,19 @@ testing. Configure a custom SMTP provider under
 real users arrive. Consider enabling CAPTCHA / rate limits under
 **Authentication → Attack Protection**.
 
+## Check that sign-up works
+
+From the repo root (with a `.env`, or the bundled config), using an email
+you control:
+
+```bash
+python tools/check_auth.py --email yourname+test1@gmail.com
+```
+
+It verifies the connection, that anonymous users can't read data, and
+attempts a real sign-up, then explains any failure (rate limit, email not
+authorized, signups disabled...). Also check **Logs -> Auth** in Supabase.
+
 ## 5. GitHub secrets for the release build
 
 In the repo: **Settings → Secrets and variables → Actions → New

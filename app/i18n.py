@@ -59,6 +59,47 @@ TRANSLATIONS = {
         ),
         "reset_done": "Senha atualizada! Agora você pode entrar.",
         "cancel": "Cancelar",
+        "err_rate_limit": (
+            "Muitas tentativas ou e-mails enviados. Aguarde um pouco "
+            "e tente novamente."
+        ),
+        "err_email_not_authorized": (
+            "Não foi possível enviar o e-mail de confirmação para este "
+            "endereço agora. Tente novamente mais tarde."
+        ),
+        "err_user_exists": (
+            "Já existe uma conta com este e-mail. Tente entrar."
+        ),
+        "err_weak_password": (
+            "Senha muito fraca. Use uma senha mais longa e difícil de "
+            "adivinhar."
+        ),
+        "err_signup_disabled": (
+            "Novos cadastros estão temporariamente indisponíveis."
+        ),
+        "err_email_not_confirmed": (
+            "Confirme seu e-mail pelo link que enviamos antes de entrar."
+        ),
+        "err_network": (
+            "Sem conexão com o servidor. Verifique sua internet e "
+            "tente novamente."
+        ),
+        "err_server_config": (
+            "O aplicativo não conseguiu se autenticar no servidor. "
+            "Atualize para a versão mais recente."
+        ),
+        "err_same_password": (
+            "A nova senha precisa ser diferente da anterior."
+        ),
+        "reset_update_failed": (
+            "Código aceito, mas não foi possível definir a nova senha. "
+            "Tente outra senha."
+        ),
+        "err_timeout": (
+            "O servidor demorou demais para responder (geralmente o envio "
+            "do e-mail de confirmação). Aguarde alguns minutos e tente "
+            "novamente."
+        ),
     },
     "en_US": {
         "brand": "FinanceTracker",
@@ -113,6 +154,45 @@ TRANSLATIONS = {
         ),
         "reset_done": "Password updated! You can now sign in.",
         "cancel": "Cancel",
+        "err_rate_limit": (
+            "Too many attempts or emails sent. Please wait a bit and "
+            "try again."
+        ),
+        "err_email_not_authorized": (
+            "We couldn't send the confirmation email to this address "
+            "right now. Please try again later."
+        ),
+        "err_user_exists": (
+            "An account with this email already exists. Try signing in."
+        ),
+        "err_weak_password": (
+            "That password is too weak. Use a longer, harder-to-guess "
+            "password."
+        ),
+        "err_signup_disabled": "New sign-ups are temporarily unavailable.",
+        "err_email_not_confirmed": (
+            "Please confirm your email using the link we sent before "
+            "signing in."
+        ),
+        "err_network": (
+            "Can't reach the server. Check your internet connection and "
+            "try again."
+        ),
+        "err_server_config": (
+            "The app couldn't authenticate with the server. Please "
+            "update to the latest version."
+        ),
+        "err_same_password": (
+            "The new password must be different from the old one."
+        ),
+        "reset_update_failed": (
+            "Code accepted, but the new password couldn't be set. "
+            "Try a different password."
+        ),
+        "err_timeout": (
+            "The server took too long to respond (usually sending the "
+            "confirmation email). Please wait a few minutes and try again."
+        ),
     },
 }
 

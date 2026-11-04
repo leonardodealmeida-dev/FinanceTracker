@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.auth_errors import classify_auth_error
 from app.i18n import tr
+from app.logging_setup import logger
 from app.services.supabase_service import supabase
 
 
@@ -22,6 +24,7 @@ class ResetPasswordDialog(QDialog):
         self.setWindowTitle(tr("reset_title"))
         self.setMinimumWidth(380)
         self.email_value = ""
+        self.verified = False  # code already accepted (session is active)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -72,7 +75,7 @@ class ResetPasswordDialog(QDialog):
             widget.setEnabled(enabled)
 
     def send_code(self):
-        email = self.email.text().strip()
+        email = self.email.text().strip().lower()
         if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
             self.status.setText(tr("invalid_email"))
             return
@@ -85,16 +88,27 @@ class ResetPasswordDialog(QDialog):
             self.set_step_two(True)
             self.code.setFocus()
         except Exception as error:
-            print("Password reset request error:", str(error))
-            self.status.setText(tr("reset_send_failed"))
+            logger.error(
+                "Password reset request error: %s: %s",
+                type(error).__name__, error,
+            )
+            key = classify_auth_error(error)
+            self.status.setText(
+                tr("reset_send_failed") if key == "operation_failed"
+                else tr(key)
+            )
         finally:
             self.send_button.setEnabled(True)
 
     def confirm(self):
-        code = self.code.text().strip()
+        # People often paste codes with spaces ("123 456").
+        code = "".join(self.code.text().split())
         password = self.new_password.text()
 
-        if not code or not password:
+        if not self.verified and not code:
+            self.status.setText(tr("fill_fields"))
+            return
+        if not password:
             self.status.setText(tr("fill_fields"))
             return
         if len(password) < 8:
@@ -102,19 +116,57 @@ class ResetPasswordDialog(QDialog):
             return
 
         self.confirm_button.setEnabled(False)
+
+        # Step 1: check the emailed code (single use).
+        if not self.verified:
+            try:
+                supabase.auth.verify_otp({
+                    "email": self.email_value,
+                    "token": code,
+                    "type": "recovery",
+                })
+                self.verified = True
+            except Exception as error:
+                logger.error(
+                    "Password reset: code check failed: %s: %s",
+                    type(error).__name__, error,
+                )
+                self.status.setText(tr("reset_failed"))
+                self.confirm_button.setEnabled(True)
+                return
+
+        # Step 2: set the new password. If this fails the code is already
+        # used up, so we stay signed in and let the user try another
+        # password without requesting a new code.
         try:
-            supabase.auth.verify_otp({
-                "email": self.email_value,
-                "token": code,
-                "type": "recovery",
-            })
             supabase.auth.update_user({"password": password})
-            supabase.auth.sign_out()
         except Exception as error:
-            print("Password reset error:", str(error))
-            self.status.setText(tr("reset_failed"))
+            logger.error(
+                "Password reset: setting password failed: %s: %s",
+                type(error).__name__, error,
+            )
+            key = classify_auth_error(error)
+            self.status.setText(
+                tr("reset_update_failed") if key == "operation_failed"
+                else tr(key)
+            )
             self.confirm_button.setEnabled(True)
             return
 
+        self.sign_out_quietly()
+        self.verified = False
         QMessageBox.information(self, tr("reset_title"), tr("reset_done"))
         self.accept()
+
+    def sign_out_quietly(self):
+        try:
+            supabase.auth.sign_out()
+        except Exception as error:
+            logger.error("Sign-out after reset: %s", error)
+
+    def reject(self):
+        # Closing after the code was accepted: don't leave a session open.
+        if self.verified:
+            self.sign_out_quietly()
+            self.verified = False
+        super().reject()

@@ -6,7 +6,9 @@ from PySide6.QtWidgets import (
     QPushButton, QMessageBox, QFrame
 )
 
+from app.auth_errors import classify_auth_error
 from app.i18n import tr
+from app.logging_setup import logger
 from app.ui.reset_password import ResetPasswordDialog
 from app.version import __version__
 from app.services.supabase_service import supabase
@@ -216,8 +218,12 @@ class LoginWindow(QWidget):
                     self.status.setText(tr("login_failed"))
 
         except Exception as error:
-            self.status.setText(tr("operation_failed"))
-            print("Authentication error:", str(error))
+            logger.error(
+                "Authentication error (%s): %s: %s",
+                "signup" if self.signup_mode else "login",
+                type(error).__name__, error,
+            )
+            self.status.setText(tr(classify_auth_error(error)))
 
         finally:
             self.submit_button.setEnabled(True)

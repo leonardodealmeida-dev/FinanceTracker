@@ -82,6 +82,12 @@ jobs:
           choco install innosetup --no-progress -y
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.ver.outputs.version }}" packaging\windows\installer.iss
 
+      - name: Windows .zip (extract and run)
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\FinanceTracker -DestinationPath "dist\FinanceTracker-${{ steps.ver.outputs.version }}-windows.zip"
+
       # ---- macOS disk image (unsigned) ----
       - name: macOS .dmg
         if: matrix.name == 'macos'
@@ -89,6 +95,8 @@ jobs:
           hdiutil create -volname FinanceTracker \
             -srcfolder dist/FinanceTracker.app -ov -format UDZO \
             "dist/FinanceTracker-${{ steps.ver.outputs.version }}-macos-arm64.dmg"
+          ditto -c -k --sequesterRsrc --keepParent dist/FinanceTracker.app \
+            "dist/FinanceTracker-${{ steps.ver.outputs.version }}-macos-arm64.zip"
 
       # ---- Linux archive ----
       - name: Linux .tar.gz
@@ -102,6 +110,7 @@ jobs:
           name: FinanceTracker-${{ matrix.name }}
           path: |
             dist/*-windows-setup.exe
+            dist/*.zip
             dist/*.dmg
             dist/*.tar.gz
           if-no-files-found: error

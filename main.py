@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.config import ConfigError, resource_path
 from app.i18n import tr
+from app.logging_setup import setup_logging
 from app.version import APP_NAME, __version__
 
 
@@ -18,6 +19,7 @@ def set_windows_app_id():
 
 
 def main():
+    setup_logging()
     set_windows_app_id()
 
     app = QApplication(sys.argv)
