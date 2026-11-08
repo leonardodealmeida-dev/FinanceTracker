@@ -15,10 +15,22 @@ venv/
 # Private configuration
 .env
 .env.*
+!.env.example
 
 # Compiled application
 /FinanceTracker
 /_internal/
 /icon.png
-dist/
+
+# Python and test artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Build output
 build/
+dist/
+
+# Build output
+build/
+dist/

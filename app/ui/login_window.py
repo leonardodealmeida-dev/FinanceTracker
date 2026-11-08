@@ -11,70 +11,27 @@ from app.i18n import tr
 from app.logging_setup import logger
 from app.ui.reset_password import ResetPasswordDialog
 from app.version import __version__
-from app.services.supabase_service import supabase
+from app.services.supabase_service import supabase as default_supabase
 
 
 class LoginWindow(QWidget):
     authenticated = Signal(object)
+    cancelled = Signal()
 
-    def __init__(self):
+    def __init__(self, client=None, show_cancel=False):
         super().__init__()
 
+        self.client = client or default_supabase
+        self.show_cancel = show_cancel
+        self._auth_completed = False
+        self._cancel_emitted = False
         self.signup_mode = False
         self.setWindowTitle("FinanceTracker")
         self.resize(440, 560)
         self.setMinimumSize(380, 500)
 
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #101512;
-                color: #edf5ef;
-                font-family: "Noto Sans", sans-serif;
-                font-size: 14px;
-            }
-            QFrame#card {
-                background-color: #19221c;
-                border: 1px solid #2b3b30;
-                border-radius: 18px;
-            }
-            QLabel#brand {
-                color: #7ee2a8;
-                font-size: 29px;
-                font-weight: 800;
-            }
-            QLabel#subtitle { color: #a6b7aa; font-size: 13px; }
-            QLineEdit {
-                background-color: #101512;
-                border: 1px solid #35463a;
-                border-radius: 9px;
-                padding: 12px;
-                color: white;
-            }
-            QLineEdit:focus { border: 1px solid #65cf91; }
-            QPushButton#primary {
-                background-color: #65cf91;
-                color: #102016;
-                border: none;
-                border-radius: 9px;
-                padding: 13px;
-                font-weight: 700;
-            }
-            QPushButton#primary:hover { background-color: #82e5aa; }
-            QPushButton#secondary {
-                background: transparent;
-                color: #85e5aa;
-                border: none;
-                padding: 8px;
-            }
-            QLabel#status { color: #f2b8a8; font-size: 12px; }
-            QLabel#version { color: #6f8174; font-size: 11px; }
-            QDialog QPushButton {
-                background: #26332a;
-                border: 1px solid #35463a;
-                border-radius: 8px;
-                padding: 9px 12px;
-            }
-        """)
+        # The application-wide theme stylesheet is applied by main.py.
+
 
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
@@ -124,6 +81,11 @@ class LoginWindow(QWidget):
         self.toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.toggle_button.clicked.connect(self.toggle_mode)
 
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setObjectName("link")
+        self.cancel_button.setVisible(show_cancel)
+        self.cancel_button.clicked.connect(self.cancel_add_account)
+
         self.forgot_button = QPushButton(tr("forgot_password"))
         self.forgot_button.setObjectName("secondary")
         self.forgot_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -143,14 +105,26 @@ class LoginWindow(QWidget):
         layout.addWidget(self.submit_button)
         layout.addWidget(self.forgot_button)
         layout.addWidget(self.toggle_button)
+        layout.addWidget(self.cancel_button)
         layout.addWidget(version)
 
         root.addWidget(card)
 
     def forgot_password(self):
-        dialog = ResetPasswordDialog(self, self.email.text().strip())
-        dialog.setStyleSheet(self.styleSheet())
+        dialog = ResetPasswordDialog(
+            self, self.email.text().strip(), client=self.client
+        )
         dialog.exec()
+
+    def cancel_add_account(self):
+        if not self._cancel_emitted:
+            self._cancel_emitted = True
+            self.cancelled.emit()
+
+    def closeEvent(self, event):
+        if self.show_cancel and not self._auth_completed:
+            self.cancel_add_account()
+        super().closeEvent(event)
 
     def toggle_mode(self):
         self.signup_mode = not self.signup_mode
@@ -188,13 +162,14 @@ class LoginWindow(QWidget):
 
         try:
             if self.signup_mode:
-                response = supabase.auth.sign_up({
+                response = self.client.auth.sign_up({
                     "email": email,
                     "password": password,
                 })
 
                 if response.session and response.user:
                     self.status.clear()
+                    self._auth_completed = True
                     self.authenticated.emit(response.user)
                     return
 
@@ -206,13 +181,14 @@ class LoginWindow(QWidget):
                 self.toggle_mode()
 
             else:
-                response = supabase.auth.sign_in_with_password({
+                response = self.client.auth.sign_in_with_password({
                     "email": email,
                     "password": password,
                 })
 
                 if response.user and response.session:
                     self.status.clear()
+                    self._auth_completed = True
                     self.authenticated.emit(response.user)
                 else:
                     self.status.setText(tr("login_failed"))

@@ -10,28 +10,41 @@ class ConfigError(RuntimeError):
 
 
 def is_frozen():
-    """True when running as a packaged (PyInstaller) app."""
     return getattr(sys, "frozen", False)
 
 
 def resource_path(relative):
-    """Path to a bundled file, in development and in a packaged app."""
     base = getattr(sys, "_MEIPASS", None) or Path(__file__).resolve().parent.parent
     return str(Path(base) / relative)
 
 
 def get_supabase_settings():
-    """Return (url, key).
+    """Load Supabase settings from environment or an adjacent .env file."""
 
-    Order: environment variables (and a local .env, development only),
-    then the values baked in at build time.
-    """
-    if not is_frozen():
-        try:
-            from dotenv import load_dotenv
-            load_dotenv()
-        except ImportError:
-            pass
+    from dotenv import load_dotenv
+
+    if is_frozen():
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates = [
+            exe_dir / ".env",
+            exe_dir.parent / ".env",
+            exe_dir.parent.parent / ".env",
+            Path.cwd() / ".env",
+        ]
+    else:
+        project_dir = Path(__file__).resolve().parent.parent
+        candidates = [
+            project_dir / ".env",
+            Path.cwd() / ".env",
+        ]
+
+    # Load available .env files without overwriting existing environment variables.
+    checked = set()
+    for env_file in candidates:
+        env_file = env_file.resolve()
+        if env_file not in checked and env_file.is_file():
+            load_dotenv(dotenv_path=env_file, override=False)
+            checked.add(env_file)
 
     url = os.getenv("SUPABASE_URL", "").strip()
     key = os.getenv("SUPABASE_KEY", "").strip()
@@ -44,6 +57,7 @@ def get_supabase_settings():
     if not url or not key:
         raise ConfigError(
             "SUPABASE_URL / SUPABASE_KEY are not configured. "
-            "Create a .env file (see README) or use an official build."
+            "Place a .env file beside the executable or use an official build."
         )
+
     return url, key

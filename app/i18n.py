@@ -46,8 +46,9 @@ TRANSLATIONS = {
         "reset_intro": "Digite seu e-mail para receber um código.",
         "reset_send_code": "Enviar código",
         "reset_code_sent": (
-            "Se existir uma conta com esse e-mail, enviamos um código. "
-            "Digite-o abaixo com sua nova senha."
+            "Enviamos um código de verificação para seu e-mail. "
+            "Se não encontrá-lo em alguns minutos, confira as pastas "
+            "de spam ou lixo eletrônico. Digite o código abaixo com sua nova senha."
         ),
         "reset_code_placeholder": "Código recebido por e-mail",
         "reset_new_password": "Nova senha (mín. 8 caracteres)",
@@ -87,13 +88,6 @@ TRANSLATIONS = {
         "err_server_config": (
             "O aplicativo não conseguiu se autenticar no servidor. "
             "Atualize para a versão mais recente."
-        ),
-        "err_same_password": (
-            "A nova senha precisa ser diferente da anterior."
-        ),
-        "reset_update_failed": (
-            "Código aceito, mas não foi possível definir a nova senha. "
-            "Tente outra senha."
         ),
         "err_timeout": (
             "O servidor demorou demais para responder (geralmente o envio "
@@ -142,8 +136,9 @@ TRANSLATIONS = {
         "reset_intro": "Enter your email to receive a code.",
         "reset_send_code": "Send code",
         "reset_code_sent": (
-            "If an account exists for that email, we sent a code. "
-            "Enter it below with your new password."
+            "We've sent a verification code to your email address. "
+            "If you don't see it within a few minutes, check your spam "
+            "or junk folder. Enter the code below with your new password."
         ),
         "reset_code_placeholder": "Code from the email",
         "reset_new_password": "New password (min. 8 characters)",
@@ -181,13 +176,6 @@ TRANSLATIONS = {
         "err_server_config": (
             "The app couldn't authenticate with the server. Please "
             "update to the latest version."
-        ),
-        "err_same_password": (
-            "The new password must be different from the old one."
-        ),
-        "reset_update_failed": (
-            "Code accepted, but the new password couldn't be set. "
-            "Try a different password."
         ),
         "err_timeout": (
             "The server took too long to respond (usually sending the "

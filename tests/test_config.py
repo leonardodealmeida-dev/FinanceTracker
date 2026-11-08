@@ -29,11 +29,13 @@ def test_env_vars_are_used():
         assert config.get_supabase_settings() == ("https://x.supabase.co", "sb_publishable_abc")
 
 
-def test_missing_settings_raise_config_error():
+def test_missing_settings_raise_config_error(monkeypatch):
     from app import bundled_config
     old = (bundled_config.SUPABASE_URL, bundled_config.SUPABASE_KEY)
     bundled_config.SUPABASE_URL = bundled_config.SUPABASE_KEY = ""
     try:
+        monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
+
         with env(SUPABASE_URL=None, SUPABASE_KEY=None):
             # Not frozen, so a developer .env could be read; point cwd away.
             cwd = os.getcwd()
@@ -51,12 +53,14 @@ def test_missing_settings_raise_config_error():
         bundled_config.SUPABASE_URL, bundled_config.SUPABASE_KEY = old
 
 
-def test_bundled_values_used_when_env_empty():
+def test_bundled_values_used_when_env_empty(monkeypatch):
     from app import bundled_config
     old = (bundled_config.SUPABASE_URL, bundled_config.SUPABASE_KEY)
     bundled_config.SUPABASE_URL = "https://bundled.supabase.co"
     bundled_config.SUPABASE_KEY = "sb_publishable_bundled"
     try:
+        monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
+
         with env(SUPABASE_URL=None, SUPABASE_KEY=None):
             cwd = os.getcwd()
             os.chdir("/")

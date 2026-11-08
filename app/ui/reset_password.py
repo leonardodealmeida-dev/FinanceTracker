@@ -15,12 +15,13 @@ from PySide6.QtWidgets import (
 from app.auth_errors import classify_auth_error
 from app.i18n import tr
 from app.logging_setup import logger
-from app.services.supabase_service import supabase
+from app.services.supabase_service import supabase as default_supabase
 
 
 class ResetPasswordDialog(QDialog):
-    def __init__(self, parent=None, email=""):
+    def __init__(self, parent=None, email="", client=None):
         super().__init__(parent)
+        self.client = client or default_supabase
         self.setWindowTitle(tr("reset_title"))
         self.setMinimumWidth(380)
         self.email_value = ""
@@ -82,7 +83,7 @@ class ResetPasswordDialog(QDialog):
 
         self.send_button.setEnabled(False)
         try:
-            supabase.auth.reset_password_for_email(email)
+            self.client.auth.reset_password_for_email(email)
             self.email_value = email
             self.status.setText(tr("reset_code_sent"))
             self.set_step_two(True)
@@ -120,7 +121,7 @@ class ResetPasswordDialog(QDialog):
         # Step 1: check the emailed code (single use).
         if not self.verified:
             try:
-                supabase.auth.verify_otp({
+                self.client.auth.verify_otp({
                     "email": self.email_value,
                     "token": code,
                     "type": "recovery",
@@ -139,7 +140,7 @@ class ResetPasswordDialog(QDialog):
         # used up, so we stay signed in and let the user try another
         # password without requesting a new code.
         try:
-            supabase.auth.update_user({"password": password})
+            self.client.auth.update_user({"password": password})
         except Exception as error:
             logger.error(
                 "Password reset: setting password failed: %s: %s",
@@ -160,7 +161,7 @@ class ResetPasswordDialog(QDialog):
 
     def sign_out_quietly(self):
         try:
-            supabase.auth.sign_out()
+            self.client.auth.sign_out()
         except Exception as error:
             logger.error("Sign-out after reset: %s", error)
 

@@ -85,3 +85,13 @@ The build refuses to bundle a secret key.
 Users' financial data is stored in your project. Publish a privacy
 policy, keep backups, and respond to data requests (LGPD/GDPR). The
 in-app "Delete account" button covers deletion requests.
+
+## Custom transaction categories (desktop + web)
+
+For FinanceTracker v1.1.5 and newer, run `migrations/003_custom_categories.sql`
+in the Supabase SQL Editor. This creates the `custom_categories` table and
+account-scoped row-level security policies. The web app and PySide6 app use
+the same table and store a custom category on a transaction as
+`custom:<category-uuid>`.
+
+The migration is safe to run more than once.

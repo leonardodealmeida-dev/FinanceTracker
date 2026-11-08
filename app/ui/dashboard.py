@@ -3,12 +3,13 @@ from datetime import date
 from decimal import Decimal
 
 from PySide6.QtCore import Qt, QDate, QTimer, Signal
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QDialog, QFormLayout,
     QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit,
     QTextEdit, QMessageBox, QHeaderView, QFrame, QCheckBox, QTabWidget,
-    QInputDialog
+    QInputDialog, QScrollArea
 )
 
 from app.analytics import (
@@ -16,7 +17,9 @@ from app.analytics import (
 )
 from app.i18n import LANGUAGE, tr
 from app.recurrence import FREQUENCIES, add_months_to_first, expand, parse_date
-from app.services.supabase_service import supabase
+from app.services.supabase_service import supabase as default_supabase
+from app.ui.settings import SettingsDialog, AboutDialog
+from app.ui.theme import apply_theme, get_theme
 from app.tutorial_state import mark_seen, should_show
 from app.ui.charts import BalanceLineChart, CategoryDonutChart, MonthlyBarChart
 from app.ui.tutorial import TutorialDialog
@@ -118,7 +121,7 @@ TEXT = {
         "delete_error": "Could not delete the transaction.",
         "search": "Search transactions...",
         "all": "All",
-        "date_start": "Date / starts on",
+        "date_start": "Date / start",
         "amount_each": "Amount (each time)",
         "repeats": "Repeats",
         "once": "One time", "daily": "Daily", "weekly": "Weekly",
@@ -182,25 +185,44 @@ def money(value):
 
 
 class TransactionDialog(QDialog):
-    def __init__(self, parent=None, transaction=None):
+    def __init__(self, parent=None, transaction=None, client=None, user=None, custom_categories=None):
         super().__init__(parent)
         self.transaction = transaction
-        self.setWindowTitle(
-            T["edit_title"] if transaction else T["new"]
-        )
-        self.setMinimumWidth(420)
+        self.client = client or default_supabase
+        self.user = user
+        self.custom_categories = list(custom_categories or [])
+        self.setWindowTitle(T["edit_title"] if transaction else T["new"])
+        self.setObjectName("transactionDialog")
+        self.setMinimumWidth(470)
+        self.resize(500, 570)
+        self.setModal(True)
 
+        # Header: title and a compact close button, matching the web dialog.
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        layout.setContentsMargins(22, 18, 22, 20)
+        layout.setSpacing(13)
+
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        heading = QLabel(T["edit_title"] if transaction else T["new"])
+        heading.setObjectName("transactionDialogTitle")
+        close_button = QPushButton("×")
+        close_button.setObjectName("dialogClose")
+        close_button.setFixedSize(38, 38)
+        close_button.clicked.connect(self.reject)
+        header.addWidget(heading)
+        header.addStretch(1)
+        header.addWidget(close_button)
+        layout.addLayout(header)
 
         self.title_input = QLineEdit()
         self.title_input.setMaxLength(120)
-        self.title_input.setPlaceholderText(T["description"])
+        self.title_input.setPlaceholderText("e.g. Monthly salary" if LANGUAGE == "en_US" else T["description"])
 
         self.amount_input = QDoubleSpinBox()
-        self.amount_input.setRange(0.01, 9999999999.99)
+        self.amount_input.setRange(0, 9999999999.99)
         self.amount_input.setDecimals(2)
-        self.amount_input.setPrefix("$ ")
+        self.amount_input.setPrefix("")
         self.amount_input.setGroupSeparatorShown(True)
 
         self.type_input = QComboBox()
@@ -208,51 +230,78 @@ class TransactionDialog(QDialog):
         self.type_input.addItem(T["income_type"], "income")
 
         self.category_input = QComboBox()
-        for key in CATEGORIES:
-            self.category_input.addItem(T[key], key)
+        self._last_category = "food"
+        self._refresh_category_options()
+        self.category_input.currentIndexChanged.connect(self._category_changed)
+        self.type_input.currentIndexChanged.connect(self._refresh_category_options)
 
         self.date_input = QDateEdit()
         self.date_input.setCalendarPopup(True)
-        self.date_input.setDisplayFormat("yyyy-MM-dd")
+        self.date_input.setDisplayFormat("MM/dd/yyyy")
         self.date_input.setDate(QDate.currentDate())
 
-        # Recurrence: one-time, or repeating (daily/weekly/monthly/yearly)
+        # Recurrence remains supported, but the optional end-date controls are
+        # only shown when a repeating schedule is selected.
         self.frequency_input = QComboBox()
         for key in FREQUENCIES:
             self.frequency_input.addItem(T[key], key)
-        self.frequency_input.currentIndexChanged.connect(
-            self.update_end_controls
-        )
+        self.frequency_input.currentIndexChanged.connect(self.update_end_controls)
 
         self.end_check = QCheckBox(T["has_end"])
         self.end_check.toggled.connect(self.update_end_controls)
         self.end_input = QDateEdit()
         self.end_input.setCalendarPopup(True)
-        self.end_input.setDisplayFormat("yyyy-MM-dd")
+        self.end_input.setDisplayFormat("MM/dd/yyyy")
         self.end_input.setDate(QDate.currentDate().addYears(1))
 
-        end_row = QHBoxLayout()
-        end_row.addWidget(self.end_check)
-        end_row.addWidget(self.end_input, 1)
+        end_content = QHBoxLayout()
+        end_content.setContentsMargins(0, 0, 0, 0)
+        end_content.setSpacing(10)
+        end_content.addWidget(self.end_check)
+        end_content.addWidget(self.end_input, 1)
+        self.end_field = QWidget()
+        self.end_field.setLayout(end_content)
 
         self.notes_input = QTextEdit()
-        self.notes_input.setMaximumHeight(85)
-        self.notes_input.setPlaceholderText(T["notes"])
+        self.notes_input.setMaximumHeight(78)
+        self.notes_input.setMinimumHeight(72)
+        self.notes_input.setPlaceholderText("Optional notes" if LANGUAGE == "en_US" else T["notes"])
 
-        form.addRow(T["description"], self.title_input)
-        form.addRow(T["amount_each"], self.amount_input)
-        form.addRow(T["type"], self.type_input)
-        form.addRow(T["category"], self.category_input)
-        form.addRow(T["date_start"], self.date_input)
-        form.addRow(T["repeats"], self.frequency_input)
-        form.addRow(T["end_date"], end_row)
-        form.addRow(T["notes"], self.notes_input)
-        layout.addLayout(form)
+        fields = QGridLayout()
+        fields.setContentsMargins(0, 0, 0, 0)
+        fields.setHorizontalSpacing(12)
+        fields.setVerticalSpacing(11)
+        fields.setColumnStretch(0, 1)
+        fields.setColumnStretch(1, 1)
+
+        def add_field(label_text, widget, row, column=0, span=1):
+            label = QLabel(label_text)
+            label.setObjectName("transactionFieldLabel")
+            fields.addWidget(label, row * 2, column, 1, span)
+            fields.addWidget(widget, row * 2 + 1, column, 1, span)
+            widget.setMinimumHeight(46)
+            return label
+
+        add_field(T["description"], self.title_input, 0, 0, 2)
+        add_field(T["amount"], self.amount_input, 1, 0)
+        add_field(T["type"], self.type_input, 1, 1)
+        add_field(T["category"], self.category_input, 2, 0, 2)
+        add_field(T["date_start"], self.date_input, 3, 0)
+        add_field(T["repeats"], self.frequency_input, 3, 1)
+        self.end_label = add_field(T["end_date"], self.end_field, 4, 0, 2)
+        add_field(T["notes"], self.notes_input, 5, 0, 2)
+        layout.addLayout(fields)
 
         buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addStretch(1)
         cancel = QPushButton(T["cancel"])
-        save = QPushButton(T["save"])
+        save = QPushButton(T["save"] if LANGUAGE != "en_US" else "Save transaction")
         save.setObjectName("primary")
+        cancel.setMinimumWidth(125)
+        save.setMinimumWidth(165)
+        cancel.setMinimumHeight(46)
+        save.setMinimumHeight(46)
         cancel.clicked.connect(self.reject)
         save.clicked.connect(self.validate_and_accept)
         buttons.addWidget(cancel)
@@ -270,20 +319,14 @@ class TransactionDialog(QDialog):
             if index >= 0:
                 self.category_input.setCurrentIndex(index)
 
-            parsed = QDate.fromString(
-                transaction["transaction_date"], "yyyy-MM-dd"
-            )
+            parsed = QDate.fromString(transaction["transaction_date"], "yyyy-MM-dd")
             if parsed.isValid():
                 self.date_input.setDate(parsed)
 
-            index = self.frequency_input.findData(
-                transaction.get("frequency") or "once"
-            )
+            index = self.frequency_input.findData(transaction.get("frequency") or "once")
             self.frequency_input.setCurrentIndex(max(0, index))
 
-            end = QDate.fromString(
-                transaction.get("end_date") or "", "yyyy-MM-dd"
-            )
+            end = QDate.fromString(transaction.get("end_date") or "", "yyyy-MM-dd")
             if end.isValid():
                 self.end_input.setDate(end)
                 self.end_check.setChecked(True)
@@ -292,14 +335,93 @@ class TransactionDialog(QDialog):
 
         self.update_end_controls()
 
+    def _refresh_category_options(self):
+        previous = self.category_input.currentData()
+        tx_type = self.type_input.currentData()
+        self.category_input.blockSignals(True)
+        self.category_input.clear()
+        self.category_input.addItem("+ Create new category...", "__create_new__")
+        for key in CATEGORIES:
+            self.category_input.addItem(T[key], key)
+        for item in sorted(self.custom_categories, key=lambda c: c.get("name", "").lower()):
+            if item.get("type") == tx_type:
+                self.category_input.addItem(item.get("name", "Custom"), f"custom:{item.get('id')}")
+        index = self.category_input.findData(previous)
+        if index < 0:
+            index = self.category_input.findData("food")
+        self.category_input.setCurrentIndex(max(0, index))
+        self._last_category = self.category_input.currentData() or "food"
+        self.category_input.blockSignals(False)
+
+    def _category_changed(self, index):
+        selected_value = self.category_input.itemData(index)
+        if selected_value != "__create_new__":
+            if selected_value:
+                self._last_category = selected_value
+            return
+        # Restore the last valid category before opening the prompt.
+        self.category_input.blockSignals(True)
+        restore_index = self.category_input.findData(self._last_category)
+        self.category_input.setCurrentIndex(max(0, restore_index))
+        self.category_input.blockSignals(False)
+        name, ok = QInputDialog.getText(
+            self, "Create category", "Category name (up to 32 characters):"
+        )
+        if not ok:
+            return
+        name = " ".join(name.strip().split())
+        if not name or len(name) > 32:
+            QMessageBox.warning(self, T["error"], "Enter a category name of 1–32 characters.")
+            return
+        tx_type = self.type_input.currentData()
+        duplicate = next(
+            (c for c in self.custom_categories
+             if c.get("type") == tx_type and c.get("name", "").casefold() == name.casefold()),
+            None,
+        )
+        if duplicate:
+            category_id = duplicate["id"]
+        else:
+            try:
+                response = self.client.table("custom_categories").insert({
+                    "user_id": self.user.id,
+                    "name": name,
+                    "type": tx_type,
+                }).select("id,name,type").execute()
+                created_rows = response.data or []
+                if not created_rows:
+                    raise RuntimeError("Supabase did not return the created category.")
+                created = created_rows[0]
+                self.custom_categories.append(created)
+                category_id = created["id"]
+            except Exception as error:
+                message = str(error)
+                if "custom_categories" in message or "42P01" in message or "PGRST" in message:
+                    message = (
+                        "Custom categories are not set up in Supabase yet. "
+                        "Run migrations/003_custom_categories.sql in the SQL Editor."
+                    )
+                QMessageBox.warning(self, T["error"], message)
+                self._refresh_category_options()
+                return
+        self._refresh_category_options()
+        selected = self.category_input.findData(f"custom:{category_id}")
+        if selected >= 0:
+            self.category_input.setCurrentIndex(selected)
+
     def update_end_controls(self):
         repeating = self.frequency_input.currentData() != "once"
+        self.end_label.setVisible(repeating)
+        self.end_field.setVisible(repeating)
         self.end_check.setEnabled(repeating)
         self.end_input.setEnabled(repeating and self.end_check.isChecked())
 
     def validate_and_accept(self):
         if not self.title_input.text().strip():
             QMessageBox.warning(self, T["error"], T["required"])
+            return
+        if self.amount_input.value() <= 0:
+            QMessageBox.warning(self, T["error"], "Enter an amount greater than zero." if LANGUAGE == "en_US" else "Informe um valor maior que zero.")
             return
         if (
             self.end_input.isEnabled()
@@ -340,121 +462,52 @@ def repeats_label(transaction):
 
 class Dashboard(QWidget):
     logged_out = Signal()
+    add_account_requested = Signal()
+    switch_account_requested = Signal(str)
 
-    def __init__(self, user):
+    def __init__(self, user, client=None, account_manager=None, account_id="primary"):
         super().__init__()
         self.user = user
+        self.client = client or default_supabase
+        self.account_manager = account_manager
+        self.account_id = account_id
+        self.custom_categories = []
         self.rows = []
 
         self.setWindowTitle("FinanceTracker")
-        self.resize(1150, 800)
-        self.setMinimumSize(900, 620)
 
-        self.setStyleSheet("""
-            QWidget {
-                background: #101512;
-                color: #edf5ef;
-                font-family: "Noto Sans", sans-serif;
-                font-size: 13px;
-            }
-            QFrame#panel {
-                background: #19221c;
-                border: 1px solid #2b3b30;
-                border-radius: 12px;
-            }
-            QLabel#brand {
-                color: #7ee2a8;
-                font-size: 23px;
-                font-weight: 800;
-            }
-            QLabel#metric {
-                color: #7ee2a8;
-                font-size: 24px;
-                font-weight: 700;
-            }
-            QLabel#muted { color: #a6b7aa; }
-            QPushButton {
-                background: #26332a;
-                border: 1px solid #35463a;
-                border-radius: 8px;
-                padding: 9px 12px;
-            }
-            QPushButton:hover { background: #35483a; }
-            QPushButton#primary {
-                background: #65cf91;
-                color: #102016;
-                border: none;
-                font-weight: 700;
-            }
-            QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit, QTextEdit {
-                background: #101512;
-                border: 1px solid #35463a;
-                border-radius: 7px;
-                padding: 8px;
-            }
-            QComboBox QAbstractItemView {
-                background: #19221c;
-                selection-background-color: #315c40;
-            }
-            QTabWidget::pane { border: none; }
-            QTabBar::tab {
-                background: #19221c;
-                color: #a6b7aa;
-                padding: 9px 18px;
-                border: 1px solid #2b3b30;
-                border-radius: 8px;
-                margin-right: 6px;
-            }
-            QTabBar::tab:selected {
-                background: #26332a;
-                color: #edf5ef;
-                font-weight: 700;
-            }
-            QTableWidget {
-                background: #19221c;
-                alternate-background-color: #1d2921;
-                border: 1px solid #2b3b30;
-                border-radius: 8px;
-                gridline-color: #2b3b30;
-                selection-background-color: #315c40;
-            }
-            QHeaderView::section {
-                background: #202d24;
-                color: #c7d7cb;
-                padding: 9px;
-                border: none;
-            }
-        """)
+        # Fit the initial window inside the usable desktop area. The old
+        # fixed 1150x800 size pushed the footer below the screen on laptops.
+        screen = QGuiApplication.primaryScreen()
+        available = screen.availableGeometry() if screen else None
+        if available:
+            initial_width = min(1150, max(760, available.width() - 64))
+            initial_height = min(740, max(540, available.height() - 64))
+            self.resize(initial_width, initial_height)
+        else:
+            self.resize(1050, 680)
+        self.setMinimumSize(760, 540)
+
+        # All windows share the app-wide theme stylesheet.
+
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 20)
+        # The content must reach the bottom edge. Floating actions are overlays,
+        # not a footer row that reserves a dark strip below the charts.
+        root.setContentsMargins(24, 20, 24, 0)
         root.setSpacing(16)
+
+        self.status = QLabel("")
+        self.status.setObjectName("muted")
+        self.status.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         header = QHBoxLayout()
         brand = QLabel("FinanceTracker")
         brand.setObjectName("brand")
-
-        self.user_label = QLabel(user.email or "")
-        self.user_label.setObjectName("muted")
-
-        logout = QPushButton(T["logout"])
-        logout.clicked.connect(self.logout)
-
-        delete_account = QPushButton(T["delete_account"])
-        delete_account.setStyleSheet(
-            "color: #f2b8a8; border: 1px solid #5a3a33;"
-        )
-        delete_account.clicked.connect(self.delete_account)
-
         header.addWidget(brand)
+        # Keep account email inside Settings; the Overview header stays clean.
         header.addStretch()
-        help_button = QPushButton(T["help"])
-        help_button.clicked.connect(self.show_tutorial)
-
-        header.addWidget(self.user_label)
-        header.addWidget(help_button)
-        header.addWidget(delete_account)
-        header.addWidget(logout)
+        header.addWidget(self.status)
         root.addLayout(header)
 
         title_row = QHBoxLayout()
@@ -487,9 +540,19 @@ class Dashboard(QWidget):
         )
         root.addWidget(self.tabs, 1)
 
-        self.status = QLabel("")
-        self.status.setObjectName("muted")
-        root.addWidget(self.status)
+        # Two independent floating actions, matching the website. They are
+        # direct children of the dashboard (not a footer/frame/layout), so
+        # absolutely no full-width footer widget or reserved footer space exists.
+        self.about_button = QPushButton("ⓘ  About", self)
+        self.about_button.setObjectName("floatingAction")
+        self.about_button.setToolTip("About FinanceTracker")
+        self.about_button.clicked.connect(self.show_about)
+
+        self.settings_button = QPushButton("⚙  Settings", self)
+        self.settings_button.setObjectName("floatingAction")
+        self.settings_button.setToolTip("FinanceTracker settings")
+        self.settings_button.clicked.connect(self.open_settings)
+        self._position_floating_actions()
 
         self.load_transactions()
 
@@ -498,30 +561,75 @@ class Dashboard(QWidget):
         if should_show(self.user):
             QTimer.singleShot(400, self.show_first_login_tutorial)
 
+    def _position_floating_actions(self):
+        """Place About and Settings as separate overlay buttons at bottom-left."""
+        if not hasattr(self, "about_button"):
+            return
+        margin = 24
+        bottom = 20
+        height = 38
+        y = max(8, self.height() - bottom - height)
+        self.about_button.setGeometry(margin, y, 84, height)
+        self.settings_button.setGeometry(margin + 94, y, 100, height)
+        self.about_button.raise_()
+        self.settings_button.raise_()
+
+    def resizeEvent(self, event):
+        """Keep both action buttons floating over the dashboard content."""
+        super().resizeEvent(event)
+        self._position_floating_actions()
+
     def show_tutorial(self):
         TutorialDialog(self).exec()
 
     def show_first_login_tutorial(self):
         self.show_tutorial()
         # Skipped or finished: either way, don't show it again.
-        mark_seen(self.user, supabase)
+        mark_seen(self.user, self.client)
 
     # ------------------------------------------------------------ layout
     def build_charts_tab(self):
+        # A scrollable chart canvas prevents Qt Charts from being squeezed
+        # into overlapping rows on shorter displays or when the window is
+        # not maximized.
         page = QWidget()
-        grid = QGridLayout(page)
-        grid.setContentsMargins(0, 8, 0, 0)
-        grid.setSpacing(14)
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 8, 0, 0)
+        page_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        canvas = QWidget()
+        grid = QGridLayout(canvas)
+        grid.setContentsMargins(0, 0, 8, 8)
+        grid.setHorizontalSpacing(14)
+        grid.setVerticalSpacing(14)
 
         self.monthly_chart = MonthlyBarChart()
         self.category_chart = CategoryDonutChart()
         self.balance_chart = BalanceLineChart()
 
+        # Give each chart its own predictable vertical space.
+        # Slightly shorter cards leave more of the dashboard visible in a
+        # normal (non-maximized) laptop window; the chart area remains scrollable.
+        self.monthly_chart.setMinimumHeight(225)
+        self.category_chart.setMinimumHeight(225)
+        self.balance_chart.setMinimumHeight(240)
         grid.addWidget(self.monthly_chart, 0, 0)
         grid.addWidget(self.category_chart, 0, 1)
         grid.addWidget(self.balance_chart, 1, 0, 1, 2)
-        grid.setRowStretch(0, 1)
-        grid.setRowStretch(1, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setRowMinimumHeight(0, 225)
+        grid.setRowMinimumHeight(1, 240)
+        grid.setRowStretch(0, 0)
+        grid.setRowStretch(1, 0)
+
+        scroll.setWidget(canvas)
+        page_layout.addWidget(scroll)
         return page
 
     def build_transactions_tab(self):
@@ -605,13 +713,27 @@ class Dashboard(QWidget):
     def load_transactions(self):
         try:
             result = (
-                supabase.table("transactions")
+                self.client.table("transactions")
                 .select("*")
                 .eq("user_id", self.user.id)
                 .order("transaction_date", desc=True)
                 .execute()
             )
             self.rows = result.data or []
+            try:
+                categories_result = (
+                    self.client.table("custom_categories")
+                    .select("id,name,type")
+                    .eq("user_id", self.user.id)
+                    .order("name")
+                    .execute()
+                )
+                self.custom_categories = categories_result.data or []
+            except Exception as category_error:
+                # Existing users can keep using built-in categories if the
+                # optional custom-category migration has not been run.
+                self.custom_categories = []
+                print("Custom category load warning:", str(category_error))
             self.render_rows()
             self.refresh_views()
             self.status.setText("")
@@ -619,13 +741,20 @@ class Dashboard(QWidget):
             print("Transaction load error:", str(error))
             self.status.setText(T["load_error"])
 
+    def category_label(self, value):
+        if str(value).startswith("custom:"):
+            category_id = str(value).split(":", 1)[1]
+            found = next((c for c in self.custom_categories if str(c.get("id")) == category_id), None)
+            return found.get("name", "Custom category") if found else "Custom category"
+        return T.get(value, value)
+
     def render_rows(self):
         query = self.search.text().strip().lower()
         filtered = [
             row for row in self.rows
             if query in " ".join([
                 str(row.get("title") or ""),
-                str(row.get("category") or ""),
+                self.category_label(row.get("category") or "other"),
                 str(row.get("type") or ""),
                 str(row.get("notes") or ""),
                 repeats_label(row),
@@ -636,7 +765,7 @@ class Dashboard(QWidget):
 
         for row_index, transaction in enumerate(filtered):
             category = transaction.get("category") or "other"
-            category_label = T.get(category, category)
+            category_label = self.category_label(category)
             type_label = (
                 T["income_type"] if transaction["type"] == "income"
                 else T["expense"]
@@ -720,7 +849,7 @@ class Dashboard(QWidget):
         )
 
         self.category_chart.set_data(
-            [(T.get(k, k), v) for k, v in category_totals(in_period)],
+            [(self.category_label(k), v) for k, v in category_totals(in_period)],
             T["chart_category"], T["no_expenses"],
         )
 
@@ -737,14 +866,17 @@ class Dashboard(QWidget):
         return T["save_error"]
 
     def add_transaction(self):
-        dialog = TransactionDialog(self)
+        dialog = TransactionDialog(
+            self, client=self.client, user=self.user,
+            custom_categories=self.custom_categories,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
         try:
             values = dialog.values()
             values["user_id"] = self.user.id
-            supabase.table("transactions").insert(values).execute()
+            self.client.table("transactions").insert(values).execute()
             self.load_transactions()
             QMessageBox.information(self, "FinanceTracker", T["saved"])
         except Exception as error:
@@ -773,12 +905,15 @@ class Dashboard(QWidget):
         if not transaction:
             return
 
-        dialog = TransactionDialog(self, transaction)
+        dialog = TransactionDialog(
+            self, transaction, client=self.client, user=self.user,
+            custom_categories=self.custom_categories,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
         try:
-            supabase.table("transactions").update(
+            self.client.table("transactions").update(
                 dialog.values()
             ).eq("id", transaction["id"]).eq(
                 "user_id", self.user.id
@@ -803,7 +938,7 @@ class Dashboard(QWidget):
             return
 
         try:
-            supabase.table("transactions").delete().eq(
+            self.client.table("transactions").delete().eq(
                 "id", transaction["id"]
             ).eq("user_id", self.user.id).execute()
             self.load_transactions()
@@ -812,10 +947,40 @@ class Dashboard(QWidget):
             print("Transaction delete error:", str(error))
             QMessageBox.warning(self, T["error"], T["delete_error"])
 
+    def show_about(self):
+        AboutDialog(self).exec()
+
+    def open_settings(self):
+        accounts = self.account_manager.active_accounts() if self.account_manager else [
+            {"id": self.account_id, "email": self.user.email or "Account"}
+        ]
+        dialog = SettingsDialog(self.user, accounts, self.account_id, self)
+        dialog.add_account_requested.connect(
+            lambda: (dialog.accept(), self.add_account_requested.emit())
+        )
+        dialog.switch_account_requested.connect(self.switch_account_requested.emit)
+        dialog.sign_out_requested.connect(
+            lambda: (dialog.accept(), self.logout())
+        )
+        dialog.delete_account_requested.connect(
+            lambda: (dialog.accept(), self.delete_account())
+        )
+        dialog.help_requested.connect(self.show_tutorial)
+        dialog.theme_changed.connect(self.change_theme)
+        dialog.exec()
+
+    def change_theme(self, theme):
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            apply_theme(app, theme)
+            self.refresh_views()
+        self.refresh_views()
+
     def delete_account(self):
         """Permanently delete the user's account and every transaction.
 
-        Needs migrations/002_account_deletion.sql (a database function
+        Needs migrations/002_rls_and_account_deletion.sql (a database function
         that removes the signed-in user; the client can't do it alone).
         """
         answer = QMessageBox.warning(
@@ -839,7 +1004,7 @@ class Dashboard(QWidget):
             return
 
         try:
-            supabase.rpc("delete_my_account").execute()
+            self.client.rpc("delete_my_account").execute()
         except Exception as error:
             print("Account deletion error:", str(error))
             QMessageBox.warning(
@@ -848,7 +1013,7 @@ class Dashboard(QWidget):
             return
 
         try:
-            supabase.auth.sign_out()
+            self.client.auth.sign_out()
         except Exception as error:
             print("Sign-out after deletion:", str(error))
 
@@ -860,7 +1025,7 @@ class Dashboard(QWidget):
 
     def logout(self):
         try:
-            supabase.auth.sign_out()
+            self.client.auth.sign_out()
             self.logged_out.emit()
             self.close()
         except Exception as error:

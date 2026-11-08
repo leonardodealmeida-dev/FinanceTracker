@@ -69,3 +69,21 @@
 
 ### Fixed
 - Sign-out crash, empty-notes crash, negative amount formatting.
+
+### Dashboard floating action dock correction
+- Removed the About/Settings dock from the main vertical layout so it no longer reserves a full-width footer strip.
+- Repositioned the dock as a small transparent overlay anchored to the lower-left corner of the dashboard.
+- The charts/transactions tab now receives the reclaimed vertical space and remains visible in normal-sized windows.
+
+### Dashboard floating actions / footer removal
+- Removed the footer/status row from the main vertical layout so it no longer reserves a full-width strip below the charts.
+- Moved status feedback into the header.
+- Replaced the dock container with two independent About and Settings overlay buttons, positioned separately over the dashboard content.
+- Removed the bottom layout margin so the chart area reaches the bottom edge of the window.
+
+
+## Transaction dialog redesign (1.1.5)
+- Rebuilt the New/Edit Transaction dialog to match the website layout: title with close control, labels above inputs, two-column amount/type and date/repeats rows, and full-width description/category/notes fields.
+- Removed the always-visible recurrence end-date row; it appears only when a repeating frequency is selected.
+- Changed the date display to MM/DD/YYYY and removed the currency prefix from the amount field to match the web form.
+- Preserved custom categories, transaction editing, recurrence, end-date validation, and notes.

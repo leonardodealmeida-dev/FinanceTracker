@@ -13,6 +13,23 @@ GRID = QColor("#2b3b30")
 GREEN = QColor("#65cf91")
 RED = QColor("#e8836f")
 
+
+def set_chart_theme(theme):
+    """Update chart colors when the application theme changes."""
+    global BG, TEXT, GRID, GREEN, RED
+    if theme == "light":
+        BG = QColor("#ffffff")
+        TEXT = QColor("#294535")
+        GRID = QColor("#d5e4d9")
+        GREEN = QColor("#209b65")
+        RED = QColor("#d96b5d")
+    else:
+        BG = QColor("#19221c")
+        TEXT = QColor("#c7d7cb")
+        GRID = QColor("#2b3b30")
+        GREEN = QColor("#65cf91")
+        RED = QColor("#e8836f")
+
 PALETTE = [
     "#65cf91", "#e8836f", "#6fb7e8", "#e8c46f", "#b28ee8",
     "#e88fc0", "#6fe8d9", "#a3e86f", "#e8a06f", "#8f9ee8",
@@ -48,6 +65,13 @@ def _style_axis(axis):
     axis.setLinePenColor(GRID)
 
 
+def _refresh_chart_style(chart):
+    chart.setTitleBrush(TEXT)
+    chart.setBackgroundBrush(BG)
+    chart.setBackgroundPen(QPen(GRID))
+    chart.legend().setLabelColor(TEXT)
+
+
 def _clear(chart):
     chart.removeAllSeries()
     for axis in chart.axes():
@@ -67,6 +91,7 @@ class MonthlyBarChart(QChartView):
         """rows: [(first_day, income, expenses)], month_labels: [str]."""
         chart = self.chart()
         _clear(chart)
+        _refresh_chart_style(chart)
         chart.setTitle(title)
 
         income_set = QBarSet(income_label)
@@ -123,6 +148,9 @@ class CategoryDonutChart(QChartView):
         """rows: [(label, amount)] largest first."""
         chart = self.chart()
         _clear(chart)
+        # Unlike the other chart widgets, the donut previously kept the
+        # palette from the theme active when it was first created.
+        _refresh_chart_style(chart)
 
         if not rows:
             chart.setTitle(f"{title} — {empty_text}")
@@ -149,6 +177,10 @@ class CategoryDonutChart(QChartView):
             slice_.setBrush(QColor(PALETTE[index % len(PALETTE)]))
             slice_.setPen(QPen(BG, 2))
             slice_.setLabelVisible(False)
+            tooltip_text = f"{label}: {_money(value)} ({pct:.0f}%)"
+            slice_.hovered.connect(
+                lambda hovered, text=tooltip_text: self.setToolTip(text if hovered else "")
+            )
 
         chart.addSeries(series)
         chart.legend().setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -171,6 +203,7 @@ class BalanceLineChart(QChartView):
         """points: [(date, balance)] in chronological order."""
         chart = self.chart()
         _clear(chart)
+        _refresh_chart_style(chart)
         chart.setTitle(title)
         chart.legend().setVisible(False)
 
